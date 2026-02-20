@@ -5,6 +5,7 @@ const Student = require('./Student');
 const Attendance = require('./Attendance');
 const Exam = require('./Exam');
 const Marks = require('./Marks');
+const CardTemplate = require('./CardTemplate');
 
 module.exports = {
   User,
@@ -13,5 +14,6 @@ module.exports = {
   Student,
   Attendance,
   Exam,
-  Marks
+  Marks,
+  CardTemplate
 };
