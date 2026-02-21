@@ -52,6 +52,11 @@ const studentSchema = new mongoose.Schema({
     trim: true,
     default: ''
   },
+  studentPhoto: {
+    type: String,
+    trim: true,
+    default: ''
+  },
   status: {
     type: String,
     enum: ['active', 'inactive', 'left'],

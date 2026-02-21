@@ -13,6 +13,7 @@ const {
   createCardTemplate,
   updateCardTemplate,
   useCardTemplate,
+  deleteCardTemplate,
   createTenant,
   updateTenant,
   toggleStatus,
@@ -38,6 +39,7 @@ router.get('/card-templates/:id', getCardTemplate);
 router.post('/card-templates', createCardTemplate);
 router.put('/card-templates/:id', updateCardTemplate);
 router.post('/card-templates/:id/use', useCardTemplate);
+router.delete('/card-templates/:id', deleteCardTemplate);
 
 router.post('/tenants', createTenant);
 router.put('/tenants/:id', updateTenant);

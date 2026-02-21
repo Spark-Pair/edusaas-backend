@@ -206,7 +206,7 @@ exports.getTenantStudents = async (req, res) => {
 // Create Tenant
 exports.createTenant = async (req, res) => {
   try {
-    const { schoolName, username, password, validityDate } = req.body;
+    const { schoolName, schoolLogo, username, password, validityDate } = req.body;
 
     // Check if username already exists
     const existingUser = await User.findOne({ username: username.toLowerCase() });
@@ -220,6 +220,7 @@ exports.createTenant = async (req, res) => {
     // Create tenant
     const tenant = await Tenant.create({
       schoolName,
+      schoolLogo: schoolLogo?.trim?.() || '',
       status: 'active',
       validityDate: new Date(validityDate)
     });
@@ -240,6 +241,7 @@ exports.createTenant = async (req, res) => {
       data: {
         id: tenant._id,
         schoolName: tenant.schoolName,
+        schoolLogo: tenant.schoolLogo || '',
         username: username.toLowerCase(),
         status: tenant.status,
         validityDate: tenant.validityDate
@@ -257,7 +259,7 @@ exports.createTenant = async (req, res) => {
 // Update Tenant
 exports.updateTenant = async (req, res) => {
   try {
-    const { schoolName, username, password, validityDate } = req.body;
+    const { schoolName, schoolLogo, username, password, validityDate } = req.body;
 
     const tenant = await Tenant.findById(req.params.id);
 
@@ -287,6 +289,7 @@ exports.updateTenant = async (req, res) => {
 
     // Update tenant
     if (schoolName) tenant.schoolName = schoolName;
+    if (schoolLogo !== undefined) tenant.schoolLogo = schoolLogo?.trim?.() || '';
     if (validityDate) tenant.validityDate = new Date(validityDate);
     await tenant.save();
 
@@ -306,6 +309,7 @@ exports.updateTenant = async (req, res) => {
       data: {
         id: tenant._id,
         schoolName: tenant.schoolName,
+        schoolLogo: tenant.schoolLogo || '',
         username: user?.username || '',
         status: tenant.status,
         validityDate: tenant.validityDate
@@ -620,6 +624,32 @@ exports.useCardTemplate = async (req, res) => {
     });
   } catch (error) {
     console.error('Use card template error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error.'
+    });
+  }
+};
+
+// Delete Card Template (Admin)
+exports.deleteCardTemplate = async (req, res) => {
+  try {
+    const template = await CardTemplate.findById(req.params.id);
+    if (!template) {
+      return res.status(404).json({
+        success: false,
+        message: 'Template not found.'
+      });
+    }
+
+    await template.deleteOne();
+
+    res.json({
+      success: true,
+      message: 'Template deleted successfully.'
+    });
+  } catch (error) {
+    console.error('Delete card template error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error.'

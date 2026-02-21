@@ -6,6 +6,11 @@ const tenantSchema = new mongoose.Schema({
     required: [true, 'School name is required'],
     trim: true
   },
+  schoolLogo: {
+    type: String,
+    trim: true,
+    default: ''
+  },
   status: {
     type: String,
     enum: ['active', 'inactive'],

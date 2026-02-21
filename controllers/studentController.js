@@ -88,7 +88,7 @@ exports.getStudent = async (req, res) => {
 // Create Student
 exports.createStudent = async (req, res) => {
   try {
-    const { firstName, lastName, rollNo, classId, dob, gender, guardian, contact, address } = req.body;
+    const { firstName, lastName, rollNo, classId, dob, gender, guardian, contact, address, studentPhoto } = req.body;
 
     // Validate required fields
     if (!firstName || !lastName || !rollNo || !classId) {
@@ -134,7 +134,8 @@ exports.createStudent = async (req, res) => {
       gender: gender || 'male',
       guardian: guardian || '',
       contact: contact || '',
-      address: address || ''
+      address: address || '',
+      studentPhoto: studentPhoto?.trim?.() || ''
     };
 
     // Only add dob if it's a valid date string
@@ -171,7 +172,7 @@ exports.createStudent = async (req, res) => {
 // Update Student
 exports.updateStudent = async (req, res) => {
   try {
-    const { firstName, lastName, rollNo, classId, dob, gender, guardian, contact, address, status } = req.body;
+    const { firstName, lastName, rollNo, classId, dob, gender, guardian, contact, address, status, studentPhoto } = req.body;
 
     const student = await Student.findOne({
       _id: req.params.id,
@@ -228,6 +229,7 @@ exports.updateStudent = async (req, res) => {
     if (guardian !== undefined) student.guardian = guardian;
     if (contact !== undefined) student.contact = contact;
     if (address !== undefined) student.address = address;
+    if (studentPhoto !== undefined) student.studentPhoto = studentPhoto?.trim?.() || '';
     if (status) student.status = status;
 
     await student.save();
