@@ -449,6 +449,9 @@ exports.createCardTemplate = async (req, res) => {
       tenantId,
       width,
       height,
+      borderRadius = 12,
+      borderWidth = 2,
+      borderColor = '#94a3b8',
       baseSvgMarkup = '',
       elements = [],
       groups = {}
@@ -471,10 +474,24 @@ exports.createCardTemplate = async (req, res) => {
 
     const parsedWidth = Number(width);
     const parsedHeight = Number(height);
+    const parsedBorderRadius = Number(borderRadius);
+    const parsedBorderWidth = Number(borderWidth);
     if (!Number.isFinite(parsedWidth) || !Number.isFinite(parsedHeight) || parsedWidth < 20 || parsedHeight < 20) {
       return res.status(400).json({
         success: false,
         message: 'Invalid template size.'
+      });
+    }
+    if (!Number.isFinite(parsedBorderRadius) || parsedBorderRadius < 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid border radius.'
+      });
+    }
+    if (!Number.isFinite(parsedBorderWidth) || parsedBorderWidth < 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid border width.'
       });
     }
 
@@ -483,6 +500,9 @@ exports.createCardTemplate = async (req, res) => {
       tenantId,
       width: parsedWidth,
       height: parsedHeight,
+      borderRadius: parsedBorderRadius,
+      borderWidth: parsedBorderWidth,
+      borderColor: typeof borderColor === 'string' && borderColor.trim() ? borderColor.trim() : '#94a3b8',
       baseSvgMarkup,
       elements,
       groups
@@ -518,6 +538,9 @@ exports.updateCardTemplate = async (req, res) => {
       name,
       width,
       height,
+      borderRadius,
+      borderWidth,
+      borderColor,
       baseSvgMarkup,
       elements,
       groups
@@ -545,6 +568,35 @@ exports.updateCardTemplate = async (req, res) => {
         });
       }
       template.height = parsedHeight;
+    }
+    if (borderRadius !== undefined) {
+      const parsedBorderRadius = Number(borderRadius);
+      if (!Number.isFinite(parsedBorderRadius) || parsedBorderRadius < 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid border radius.'
+        });
+      }
+      template.borderRadius = parsedBorderRadius;
+    }
+    if (borderWidth !== undefined) {
+      const parsedBorderWidth = Number(borderWidth);
+      if (!Number.isFinite(parsedBorderWidth) || parsedBorderWidth < 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid border width.'
+        });
+      }
+      template.borderWidth = parsedBorderWidth;
+    }
+    if (borderColor !== undefined) {
+      if (typeof borderColor !== 'string' || !borderColor.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid border color.'
+        });
+      }
+      template.borderColor = borderColor.trim();
     }
     if (typeof baseSvgMarkup === 'string') template.baseSvgMarkup = baseSvgMarkup;
     if (Array.isArray(elements)) template.elements = elements;
@@ -610,6 +662,9 @@ exports.useCardTemplate = async (req, res) => {
       tenantId,
       width: template.width,
       height: template.height,
+      borderRadius: Number.isFinite(Number(template.borderRadius)) ? Number(template.borderRadius) : 12,
+      borderWidth: Number.isFinite(Number(template.borderWidth)) ? Number(template.borderWidth) : 2,
+      borderColor: (typeof template.borderColor === 'string' && template.borderColor.trim()) ? template.borderColor.trim() : '#94a3b8',
       baseSvgMarkup: template.baseSvgMarkup || '',
       elements: template.elements || [],
       groups: template.groups || {}

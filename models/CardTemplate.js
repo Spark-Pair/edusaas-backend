@@ -22,6 +22,21 @@ const cardTemplateSchema = new mongoose.Schema(
       required: true,
       min: 20
     },
+    borderRadius: {
+      type: Number,
+      default: 12,
+      min: 0
+    },
+    borderWidth: {
+      type: Number,
+      default: 2,
+      min: 0
+    },
+    borderColor: {
+      type: String,
+      default: '#94a3b8',
+      trim: true
+    },
     baseSvgMarkup: {
       type: String,
       default: ''
