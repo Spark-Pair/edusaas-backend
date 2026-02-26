@@ -37,6 +37,11 @@ const cardTemplateSchema = new mongoose.Schema(
       default: '#94a3b8',
       trim: true
     },
+    canvasColor: {
+      type: String,
+      default: '#ffffff',
+      trim: true
+    },
     baseSvgMarkup: {
       type: String,
       default: ''

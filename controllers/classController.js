@@ -9,10 +9,7 @@ exports.getClasses = async (req, res) => {
     // Get student count for each class
     const classesWithCount = await Promise.all(
       classes.map(async (cls) => {
-        const studentCount = await Student.countDocuments({
-          classId: cls._id,
-          status: 'active'
-        });
+        const studentCount = await Student.countDocuments({ classId: cls._id });
         return { ...cls.toObject(), studentCount };
       })
     );
@@ -45,10 +42,7 @@ exports.getClass = async (req, res) => {
       });
     }
 
-    const studentCount = await Student.countDocuments({
-      classId: cls._id,
-      status: 'active'
-    });
+    const studentCount = await Student.countDocuments({ classId: cls._id });
 
     res.json({
       success: true,

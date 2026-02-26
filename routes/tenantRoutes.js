@@ -27,6 +27,7 @@ router.get('/students', studentController.getStudents);
 router.get('/students/:id', studentController.getStudent);
 router.post('/students', studentController.createStudent);
 router.put('/students/:id', studentController.updateStudent);
+router.delete('/students/:id', studentController.deleteStudent);
 router.get('/students/:id/qr', studentController.getQRCode);
 
 // Attendance

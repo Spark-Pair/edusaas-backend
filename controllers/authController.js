@@ -134,11 +134,21 @@ exports.verifyToken = async (req, res) => {
     // For tenant users, get tenant data
     if (user.role === 'tenant' && user.tenantId) {
       const tenant = await Tenant.findById(user.tenantId);
-      if (tenant) {
-        responseData.tenantId = tenant._id;
-        responseData.schoolName = tenant.schoolName;
-        responseData.validityDate = tenant.validityDate;
+      if (!tenant) {
+        return res.status(404).json({
+          success: false,
+          message: 'School not found.'
+        });
       }
+      if (tenant.status !== 'active' || new Date(tenant.validityDate) < new Date()) {
+        return res.status(403).json({
+          success: false,
+          message: 'Your school subscription is inactive or expired.'
+        });
+      }
+      responseData.tenantId = tenant._id;
+      responseData.schoolName = tenant.schoolName;
+      responseData.validityDate = tenant.validityDate;
     }
 
     return res.json({

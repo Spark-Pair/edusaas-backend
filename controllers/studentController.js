@@ -1,4 +1,4 @@
-const { Student, Class, Tenant } = require('../models');
+const { Student, Class, Tenant, Attendance, Marks } = require('../models');
 const QRCode = require('qrcode');
 
 // Generate QR Code for Student
@@ -36,11 +36,37 @@ exports.getStudents = async (req, res) => {
       .skip((page - 1) * limit)
       .limit(parseInt(limit));
 
+    const studentIds = students.map((student) => student._id);
+    let attendanceStudentIds = [];
+    let marksStudentIds = [];
+    if (studentIds.length > 0) {
+      attendanceStudentIds = await Attendance.distinct('records.studentId', {
+        tenantId: req.user.tenantId,
+        'records.studentId': { $in: studentIds }
+      });
+      marksStudentIds = await Marks.distinct('studentId', {
+        tenantId: req.user.tenantId,
+        studentId: { $in: studentIds }
+      });
+    }
+    const hasAttendanceOrExamSet = new Set([
+      ...attendanceStudentIds.map((id) => String(id)),
+      ...marksStudentIds.map((id) => String(id))
+    ]);
+    const studentsWithMeta = students.map((student) => {
+      const hasRecords = hasAttendanceOrExamSet.has(String(student._id));
+      return {
+        ...student.toObject(),
+        canDelete: !hasRecords,
+        hasAttendanceOrExam: hasRecords
+      };
+    });
+
     const total = await Student.countDocuments(query);
 
     res.json({
       success: true,
-      data: students,
+      data: studentsWithMeta,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
@@ -91,10 +117,10 @@ exports.createStudent = async (req, res) => {
     const { firstName, lastName, rollNo, classId, dob, gender, guardian, contact, address, studentPhoto } = req.body;
 
     // Validate required fields
-    if (!firstName || !lastName || !rollNo || !classId) {
+    if (!firstName || !lastName || !rollNo || !classId || !guardian || !String(guardian).trim() || !dob || !String(dob).trim() || !gender) {
       return res.status(400).json({
         success: false,
-        message: 'First name, last name, roll number, and class are required.'
+        message: 'First name, last name, roll number, class, guardian, date of birth, and gender are required.'
       });
     }
 
@@ -131,8 +157,8 @@ exports.createStudent = async (req, res) => {
       firstName,
       lastName,
       rollNo,
-      gender: gender || 'male',
-      guardian: guardian || '',
+      gender,
+      guardian: guardian.trim(),
       contact: contact || '',
       address: address || '',
       studentPhoto: studentPhoto?.trim?.() || ''
@@ -226,7 +252,15 @@ exports.updateStudent = async (req, res) => {
       student.dob = new Date(dob);
     }
     if (gender) student.gender = gender;
-    if (guardian !== undefined) student.guardian = guardian;
+    if (guardian !== undefined) {
+      if (!String(guardian).trim()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Guardian is required.'
+        });
+      }
+      student.guardian = guardian;
+    }
     if (contact !== undefined) student.contact = contact;
     if (address !== undefined) student.address = address;
     if (studentPhoto !== undefined) student.studentPhoto = studentPhoto?.trim?.() || '';
@@ -245,6 +279,54 @@ exports.updateStudent = async (req, res) => {
   } catch (error) {
     console.error('Update student error:', error);
     res.status(500).json({
+      success: false,
+      message: 'Server error: ' + error.message
+    });
+  }
+};
+
+// Delete Student
+exports.deleteStudent = async (req, res) => {
+  try {
+    const student = await Student.findOne({
+      _id: req.params.id,
+      tenantId: req.user.tenantId
+    });
+
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found.'
+      });
+    }
+
+    const [hasAttendance, hasMarks] = await Promise.all([
+      Attendance.exists({
+        tenantId: req.user.tenantId,
+        'records.studentId': student._id
+      }),
+      Marks.exists({
+        tenantId: req.user.tenantId,
+        studentId: student._id
+      })
+    ]);
+
+    if (hasAttendance || hasMarks) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot delete student with attendance or exam records.'
+      });
+    }
+
+    await Student.deleteOne({ _id: student._id, tenantId: req.user.tenantId });
+
+    return res.json({
+      success: true,
+      message: 'Student deleted successfully.'
+    });
+  } catch (error) {
+    console.error('Delete student error:', error);
+    return res.status(500).json({
       success: false,
       message: 'Server error: ' + error.message
     });

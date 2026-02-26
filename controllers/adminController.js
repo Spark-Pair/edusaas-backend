@@ -1,4 +1,6 @@
-const { Tenant, Student, Class, User, CardTemplate } = require('../models');
+const { Tenant, Student, Class, User, CardTemplate, Attendance, Exam, Marks } = require('../models');
+
+const USERNAME_REGEX = /^[a-z0-9._-]+$/;
 
 // Get Dashboard Stats
 exports.getStats = async (req, res) => {
@@ -132,7 +134,7 @@ exports.getTenantClasses = async (req, res) => {
   }
 };
 
-// Get Latest Student For Tenant (Admin)
+// Get Last Modified Student For Tenant (Admin)
 exports.getTenantLastStudent = async (req, res) => {
   try {
     const tenant = await Tenant.findById(req.params.id).select('_id schoolName');
@@ -146,7 +148,7 @@ exports.getTenantLastStudent = async (req, res) => {
 
     const student = await Student.findOne({ tenantId: tenant._id })
       .populate('classId', 'name section')
-      .sort({ createdAt: -1 });
+      .sort({ updatedAt: -1, createdAt: -1, _id: -1 });
 
     res.json({
       success: true,
@@ -207,9 +209,17 @@ exports.getTenantStudents = async (req, res) => {
 exports.createTenant = async (req, res) => {
   try {
     const { schoolName, schoolLogo, username, password, validityDate } = req.body;
+    const normalizedUsername = String(username || '').trim().toLowerCase();
+
+    if (!USERNAME_REGEX.test(normalizedUsername)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Username can only contain lowercase letters, numbers, dot, underscore, and hyphen (no spaces).'
+      });
+    }
 
     // Check if username already exists
-    const existingUser = await User.findOne({ username: username.toLowerCase() });
+    const existingUser = await User.findOne({ username: normalizedUsername });
     if (existingUser) {
       return res.status(400).json({
         success: false,
@@ -227,7 +237,7 @@ exports.createTenant = async (req, res) => {
 
     // Create user for tenant
     await User.create({
-      username: username.toLowerCase(),
+      username: normalizedUsername,
       password,
       name: schoolName,
       role: 'tenant',
@@ -237,12 +247,12 @@ exports.createTenant = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'Tenant created successfully.',
+      message: 'School created successfully.',
       data: {
         id: tenant._id,
         schoolName: tenant.schoolName,
         schoolLogo: tenant.schoolLogo || '',
-        username: username.toLowerCase(),
+        username: normalizedUsername,
         status: tenant.status,
         validityDate: tenant.validityDate
       }
@@ -260,6 +270,7 @@ exports.createTenant = async (req, res) => {
 exports.updateTenant = async (req, res) => {
   try {
     const { schoolName, schoolLogo, username, password, validityDate } = req.body;
+    const normalizedUsername = typeof username === 'string' ? username.trim().toLowerCase() : '';
 
     const tenant = await Tenant.findById(req.params.id);
 
@@ -275,8 +286,14 @@ exports.updateTenant = async (req, res) => {
 
     // Check if new username already exists (for different user)
     if (username && user) {
+      if (!USERNAME_REGEX.test(normalizedUsername)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Username can only contain lowercase letters, numbers, dot, underscore, and hyphen (no spaces).'
+        });
+      }
       const existingUser = await User.findOne({ 
-        username: username.toLowerCase(),
+        username: normalizedUsername,
         _id: { $ne: user._id }
       });
       if (existingUser) {
@@ -295,7 +312,7 @@ exports.updateTenant = async (req, res) => {
 
     // Update user
     if (user) {
-      if (username) user.username = username.toLowerCase();
+      if (username) user.username = normalizedUsername;
       if (schoolName) user.name = schoolName;
       if (password && password.trim() !== '') {
         user.password = password;
@@ -347,7 +364,7 @@ exports.toggleStatus = async (req, res) => {
 
     res.json({
       success: true,
-      message: `Tenant ${tenant.status === 'active' ? 'activated' : 'deactivated'} successfully.`,
+      message: `School ${tenant.status === 'active' ? 'activated' : 'deactivated'} successfully.`,
       data: {
         id: tenant._id,
         status: tenant.status
@@ -362,7 +379,7 @@ exports.toggleStatus = async (req, res) => {
   }
 };
 
-// Delete Tenant (Soft delete - just deactivate)
+// Delete Tenant (Hard delete with related school data)
 exports.deleteTenant = async (req, res) => {
   try {
     const tenant = await Tenant.findById(req.params.id);
@@ -374,18 +391,21 @@ exports.deleteTenant = async (req, res) => {
       });
     }
 
-    tenant.status = 'inactive';
-    await tenant.save();
-
-    // Deactivate user
-    await User.updateOne(
-      { tenantId: tenant._id },
-      { isActive: false }
-    );
+    const tenantId = tenant._id;
+    await Promise.all([
+      User.deleteMany({ tenantId }),
+      Attendance.deleteMany({ tenantId }),
+      Marks.deleteMany({ tenantId }),
+      Exam.deleteMany({ tenantId }),
+      Student.deleteMany({ tenantId }),
+      Class.deleteMany({ tenantId }),
+      CardTemplate.deleteMany({ tenantId }),
+      Tenant.deleteOne({ _id: tenantId })
+    ]);
 
     res.json({
       success: true,
-      message: 'Tenant deactivated successfully.'
+      message: 'School removed successfully.'
     });
   } catch (error) {
     console.error('Delete tenant error:', error);
@@ -452,6 +472,7 @@ exports.createCardTemplate = async (req, res) => {
       borderRadius = 12,
       borderWidth = 2,
       borderColor = '#94a3b8',
+      canvasColor = '#ffffff',
       baseSvgMarkup = '',
       elements = [],
       groups = {}
@@ -503,6 +524,7 @@ exports.createCardTemplate = async (req, res) => {
       borderRadius: parsedBorderRadius,
       borderWidth: parsedBorderWidth,
       borderColor: typeof borderColor === 'string' && borderColor.trim() ? borderColor.trim() : '#94a3b8',
+      canvasColor: typeof canvasColor === 'string' && canvasColor.trim() ? canvasColor.trim() : '#ffffff',
       baseSvgMarkup,
       elements,
       groups
@@ -541,6 +563,7 @@ exports.updateCardTemplate = async (req, res) => {
       borderRadius,
       borderWidth,
       borderColor,
+      canvasColor,
       baseSvgMarkup,
       elements,
       groups
@@ -597,6 +620,15 @@ exports.updateCardTemplate = async (req, res) => {
         });
       }
       template.borderColor = borderColor.trim();
+    }
+    if (canvasColor !== undefined) {
+      if (typeof canvasColor !== 'string' || !canvasColor.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid canvas color.'
+        });
+      }
+      template.canvasColor = canvasColor.trim();
     }
     if (typeof baseSvgMarkup === 'string') template.baseSvgMarkup = baseSvgMarkup;
     if (Array.isArray(elements)) template.elements = elements;
@@ -665,6 +697,7 @@ exports.useCardTemplate = async (req, res) => {
       borderRadius: Number.isFinite(Number(template.borderRadius)) ? Number(template.borderRadius) : 12,
       borderWidth: Number.isFinite(Number(template.borderWidth)) ? Number(template.borderWidth) : 2,
       borderColor: (typeof template.borderColor === 'string' && template.borderColor.trim()) ? template.borderColor.trim() : '#94a3b8',
+      canvasColor: (typeof template.canvasColor === 'string' && template.canvasColor.trim()) ? template.canvasColor.trim() : '#ffffff',
       baseSvgMarkup: template.baseSvgMarkup || '',
       elements: template.elements || [],
       groups: template.groups || {}
