@@ -11,6 +11,9 @@ const app = express();
 // Connect to MongoDB
 connectDB();
 
+console.log(process.env.FRONTEND_URL);
+
+
 // Middleware
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:5173',

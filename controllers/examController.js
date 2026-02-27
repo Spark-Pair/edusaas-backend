@@ -12,9 +12,20 @@ exports.getExams = async (req, res) => {
       .populate('classId', 'name section')
       .sort({ date: -1 });
 
+    const examIds = exams.map((exam) => exam._id);
+    const markedExamIds = await Marks.distinct('examId', {
+      tenantId: req.user.tenantId,
+      examId: { $in: examIds }
+    });
+    const markedIdSet = new Set(markedExamIds.map((id) => String(id)));
+    const examsWithMarksState = exams.map((exam) => ({
+      ...exam.toObject(),
+      hasMarks: markedIdSet.has(String(exam._id))
+    }));
+
     res.json({
       success: true,
-      data: exams
+      data: examsWithMarksState
     });
   } catch (error) {
     console.error('Get exams error:', error);
@@ -257,7 +268,11 @@ exports.saveMarks = async (req, res) => {
       });
     }
 
-    const maxTotal = exam.subjects.reduce((sum, s) => sum + s.maxMarks, 0);
+    const maxBySubject = exam.subjects.map((subject) => {
+      const max = Number(subject?.maxMarks);
+      return Number.isFinite(max) && max > 0 ? max : 0;
+    });
+    const maxTotal = maxBySubject.reduce((sum, max) => sum + max, 0);
 
     // Delete existing marks
     await Marks.deleteMany({
@@ -267,14 +282,20 @@ exports.saveMarks = async (req, res) => {
 
     // Create new marks
     const marksRecords = records.map(record => {
-      const total = record.marks.reduce((sum, m) => sum + (m || 0), 0);
-      const percentage = Math.round((total / maxTotal) * 100);
+      const normalizedMarks = maxBySubject.map((subjectMax, index) => {
+        const raw = Number(record?.marks?.[index]);
+        if (!Number.isFinite(raw)) return 0;
+        const parsed = Math.floor(raw);
+        return Math.max(0, Math.min(parsed, subjectMax));
+      });
+      const total = normalizedMarks.reduce((sum, m) => sum + m, 0);
+      const percentage = maxTotal > 0 ? Math.round((total / maxTotal) * 100) : 0;
 
       return {
         tenantId: req.user.tenantId,
         examId,
         studentId: record.studentId,
-        marks: record.marks,
+        marks: normalizedMarks,
         total,
         percentage
       };

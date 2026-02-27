@@ -384,24 +384,46 @@ exports.getPublicStudent = async (req, res) => {
 
     // Get attendance summary
     const Attendance = require('../models/Attendance');
+    const today = new Date();
+    const start = new Date(today);
+    start.setDate(start.getDate() - 29);
+    const todayKey = today.toISOString().slice(0, 10);
+    const startKey = start.toISOString().slice(0, 10);
+
     const attendanceRecords = await Attendance.find({
       tenantId: student.tenantId,
-      'records.studentId': student._id,
-      isDayOff: false
-    });
+      classId: student.classId,
+      date: { $gte: startKey, $lte: todayKey }
+    }).sort({ date: -1 });
 
     let presentDays = 0;
     let absentDays = 0;
     let leaveDays = 0;
 
-    attendanceRecords.forEach(att => {
-      const record = att.records.find(r => r.studentId.toString() === student._id.toString());
-      if (record) {
-        if (record.status === 'present') presentDays++;
-        else if (record.status === 'absent') absentDays++;
-        else if (record.status === 'leave') leaveDays++;
+    const attendanceByDate = new Map(attendanceRecords.map((att) => [att.date, att]));
+    const attendanceDaily = [];
+    for (let i = 0; i < 30; i++) {
+      const cursor = new Date(today);
+      cursor.setDate(today.getDate() - i);
+      const key = cursor.toISOString().slice(0, 10);
+      const attendance = attendanceByDate.get(key);
+
+      let status = 'not_marked';
+      if (attendance?.isDayOff) {
+        status = 'day_off';
+      } else if (attendance) {
+        const record = attendance.records.find((r) => r.studentId.toString() === student._id.toString());
+        if (record?.status === 'present') status = 'present';
+        else if (record?.status === 'absent') status = 'absent';
+        else if (record?.status === 'leave') status = 'leave';
       }
-    });
+
+      if (status === 'present') presentDays++;
+      if (status === 'absent') absentDays++;
+      if (status === 'leave') leaveDays++;
+
+      attendanceDaily.push({ date: key, status });
+    }
 
     const totalDays = presentDays + absentDays + leaveDays;
     const attendancePercentage = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 0;
@@ -415,11 +437,14 @@ exports.getPublicStudent = async (req, res) => {
       classId: student.classId
     }).sort({ date: -1 }).limit(5);
 
-    const examResults = await Promise.all(exams.map(async (exam) => {
+    const examResultsRaw = await Promise.all(exams.map(async (exam) => {
       const marks = await Marks.findOne({
         examId: exam._id,
         studentId: student._id
       });
+
+      // Do not expose exams where marks were never entered for this student.
+      if (!marks) return null;
 
       const maxTotal = exam.subjects.reduce((sum, s) => sum + s.maxMarks, 0);
 
@@ -436,6 +461,7 @@ exports.getPublicStudent = async (req, res) => {
         percentage: marks?.percentage || 0
       };
     }));
+    const examResults = examResultsRaw.filter(Boolean);
 
     res.json({
       success: true,
@@ -452,7 +478,8 @@ exports.getPublicStudent = async (req, res) => {
           absentDays,
           leaveDays,
           totalDays,
-          percentage: attendancePercentage
+          percentage: attendancePercentage,
+          daily: attendanceDaily
         },
         exams: examResults
       }
