@@ -42,7 +42,16 @@ const cardTemplateSchema = new mongoose.Schema(
       default: '#ffffff',
       trim: true
     },
+    backCanvasColor: {
+      type: String,
+      default: '#ffffff',
+      trim: true
+    },
     baseSvgMarkup: {
+      type: String,
+      default: ''
+    },
+    backBaseSvgMarkup: {
       type: String,
       default: ''
     },
@@ -50,7 +59,15 @@ const cardTemplateSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       default: []
     },
+    backElements: {
+      type: mongoose.Schema.Types.Mixed,
+      default: []
+    },
     groups: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {}
+    },
+    backGroups: {
       type: mongoose.Schema.Types.Mixed,
       default: {}
     }

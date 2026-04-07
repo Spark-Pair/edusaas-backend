@@ -1,6 +1,18 @@
+const QRCode = require('qrcode');
 const { Tenant, Student, Class, User, CardTemplate, Attendance, Exam, Marks } = require('../models');
 
 const USERNAME_REGEX = /^[a-z0-9._-]+$/;
+
+const generateStudentQRCode = async (studentId) => {
+  try {
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const url = `${baseUrl}/student/${studentId}`;
+    return await QRCode.toDataURL(url, { width: 300, margin: 2 });
+  } catch (error) {
+    console.error('Admin QR code generation error:', error);
+    return null;
+  }
+};
 
 // Get Dashboard Stats
 exports.getStats = async (req, res) => {
@@ -150,6 +162,14 @@ exports.getTenantLastStudent = async (req, res) => {
       .populate('classId', 'name section')
       .sort({ updatedAt: -1, createdAt: -1, _id: -1 });
 
+    if (student && !student.qrCode) {
+      const qrCode = await generateStudentQRCode(student._id);
+      if (qrCode) {
+        student.qrCode = qrCode;
+        await student.save();
+      }
+    }
+
     res.json({
       success: true,
       data: student
@@ -191,6 +211,16 @@ exports.getTenantStudents = async (req, res) => {
       .populate('classId', 'name section')
       .sort({ createdAt: -1 })
       .limit(Math.min(200, Math.max(1, parseInt(limit, 10) || 50)));
+
+    await Promise.all(
+      students.map(async (student) => {
+        if (student.qrCode) return;
+        const qrCode = await generateStudentQRCode(student._id);
+        if (!qrCode) return;
+        student.qrCode = qrCode;
+        await student.save();
+      })
+    );
 
     res.json({
       success: true,
@@ -473,9 +503,13 @@ exports.createCardTemplate = async (req, res) => {
       borderWidth = 2,
       borderColor = '#94a3b8',
       canvasColor = '#ffffff',
+      backCanvasColor = '#ffffff',
       baseSvgMarkup = '',
+      backBaseSvgMarkup = '',
       elements = [],
-      groups = {}
+      backElements = [],
+      groups = {},
+      backGroups = {}
     } = req.body;
 
     if (!tenantId) {
@@ -525,9 +559,13 @@ exports.createCardTemplate = async (req, res) => {
       borderWidth: parsedBorderWidth,
       borderColor: typeof borderColor === 'string' && borderColor.trim() ? borderColor.trim() : '#94a3b8',
       canvasColor: typeof canvasColor === 'string' && canvasColor.trim() ? canvasColor.trim() : '#ffffff',
+      backCanvasColor: typeof backCanvasColor === 'string' && backCanvasColor.trim() ? backCanvasColor.trim() : '#ffffff',
       baseSvgMarkup,
+      backBaseSvgMarkup,
       elements,
-      groups
+      backElements,
+      groups,
+      backGroups
     });
 
     const populated = await CardTemplate.findById(template._id).populate('tenantId', 'schoolName');
@@ -564,9 +602,13 @@ exports.updateCardTemplate = async (req, res) => {
       borderWidth,
       borderColor,
       canvasColor,
+      backCanvasColor,
       baseSvgMarkup,
+      backBaseSvgMarkup,
       elements,
-      groups
+      backElements,
+      groups,
+      backGroups
     } = req.body;
 
     if (typeof name === 'string' && name.trim()) {
@@ -630,9 +672,21 @@ exports.updateCardTemplate = async (req, res) => {
       }
       template.canvasColor = canvasColor.trim();
     }
+    if (backCanvasColor !== undefined) {
+      if (typeof backCanvasColor !== 'string' || !backCanvasColor.trim()) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid back canvas color.'
+        });
+      }
+      template.backCanvasColor = backCanvasColor.trim();
+    }
     if (typeof baseSvgMarkup === 'string') template.baseSvgMarkup = baseSvgMarkup;
+    if (typeof backBaseSvgMarkup === 'string') template.backBaseSvgMarkup = backBaseSvgMarkup;
     if (Array.isArray(elements)) template.elements = elements;
+    if (Array.isArray(backElements)) template.backElements = backElements;
     if (groups && typeof groups === 'object') template.groups = groups;
+    if (backGroups && typeof backGroups === 'object') template.backGroups = backGroups;
 
     await template.save();
     const populated = await CardTemplate.findById(template._id).populate('tenantId', 'schoolName');
@@ -698,9 +752,13 @@ exports.useCardTemplate = async (req, res) => {
       borderWidth: Number.isFinite(Number(template.borderWidth)) ? Number(template.borderWidth) : 2,
       borderColor: (typeof template.borderColor === 'string' && template.borderColor.trim()) ? template.borderColor.trim() : '#94a3b8',
       canvasColor: (typeof template.canvasColor === 'string' && template.canvasColor.trim()) ? template.canvasColor.trim() : '#ffffff',
+      backCanvasColor: (typeof template.backCanvasColor === 'string' && template.backCanvasColor.trim()) ? template.backCanvasColor.trim() : '#ffffff',
       baseSvgMarkup: template.baseSvgMarkup || '',
+      backBaseSvgMarkup: template.backBaseSvgMarkup || '',
       elements: template.elements || [],
-      groups: template.groups || {}
+      backElements: template.backElements || [],
+      groups: template.groups || {},
+      backGroups: template.backGroups || {}
     });
 
     const populated = await CardTemplate.findById(duplicatedTemplate._id).populate('tenantId', 'schoolName');
